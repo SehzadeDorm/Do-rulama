@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Belge Doğrulama</title>
+<style>
+  :root {
+    --green: #1a7f37;
+    --green-bg: #eafbf0;
+    --red: #b3261e;
+    --red-bg: #fdecea;
+    --ink: #1f2328;
+    --muted: #656d76;
+    --border: #d0d7de;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #f6f8fa;
+    font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    color: var(--ink);
+    padding: 24px;
+  }
+  .card {
+    width: 100%;
+    max-width: 460px;
+    background: #fff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 32px 28px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+  }
+  h1 {
+    font-size: 18px;
+    margin: 0 0 4px;
+    text-align: center;
+  }
+  .sub {
+    text-align: center;
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 24px;
+  }
+  form { display: flex; gap: 8px; margin-bottom: 8px; }
+  input[type=text] {
+    flex: 1;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 15px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  button {
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    background: #1f2328;
+    color: #fff;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  button:hover { opacity: 0.9; }
+  .result {
+    margin-top: 20px;
+    border-radius: 10px;
+    padding: 18px 18px;
+    display: none;
+  }
+  .result.show { display: block; }
+  .result.valid { background: var(--green-bg); border: 1px solid #b7e4c7; }
+  .result.invalid { background: var(--red-bg); border: 1px solid #f3c2be; }
+  .status-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    margin-bottom: 10px;
+  }
+  .valid .status-line { color: var(--green); }
+  .invalid .status-line { color: var(--red); }
+  .badge {
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 13px; flex: none;
+  }
+  .valid .badge { background: var(--green); }
+  .invalid .badge { background: var(--red); }
+  dl { margin: 0; }
+  dl div { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; font-size: 14px; border-top: 1px solid rgba(0,0,0,0.06); }
+  dl div:first-of-type { border-top: none; }
+  dt { color: var(--muted); }
+  dd { margin: 0; text-align: right; font-weight: 500; }
+  .footer-note { text-align: center; color: var(--muted); font-size: 12px; margin-top: 20px; }
+  .loading { text-align: center; color: var(--muted); font-size: 13px; margin-top: 16px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Şehzade Erkek Öğrenci Pansiyonu</h1>
+    <div class="sub">Belge Doğrulama Sistemi</div>
+
+    <form id="lookupForm">
+      <input type="text" id="codeInput" placeholder="Doğrulama kodunu girin" autocomplete="off">
+      <button type="submit">Doğrula</button>
+    </form>
+
+    <div id="loading" class="loading">Kontrol ediliyor…</div>
+
+    <div id="result" class="result">
+      <div class="status-line">
+        <span class="badge" id="badge"></span>
+        <span id="statusText"></span>
+      </div>
+      <dl id="details"></dl>
+    </div>
+
+    <div class="footer-note">Bu sayfa, karekod ile üretilen ikametgah belgelerinin<br>gerçekliğini teyit etmek içindir.</div>
+  </div>
+
+<script>
+  const RECORDS_URL = 'data/records.json';
+
+  function getCodeFromQuery() {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get('code') || '').trim().toUpperCase();
+  }
+
+  function showLoading(v) {
+    document.getElementById('loading').style.display = v ? 'block' : 'none';
+  }
+
+  function renderResult(record, code) {
+    const resultEl = document.getElementById('result');
+    const badge = document.getElementById('badge');
+    const statusText = document.getElementById('statusText');
+    const details = document.getElementById('details');
+
+    resultEl.classList.remove('valid', 'invalid');
+    details.innerHTML = '';
+
+    if (record) {
+      resultEl.classList.add('show', 'valid');
+      badge.textContent = '✓';
+      statusText.textContent = 'BELGE GEÇERLİDİR';
+      const rows = [
+        ['Öğrenci', record.ad],
+        ['TC / Kimlik No', record.tc],
+        ['İkamet Başlangıç', record.baslangic],
+        ['İkamet Bitiş', record.bitis],
+        ['Sayı', record.sayi],
+        ['Düzenleme Tarihi', record.duzenlemeTarihi],
+        ['Doğrulama Kodu', record.code]
+      ];
+      for (const [k, v] of rows) {
+        const row = document.createElement('div');
+        row.innerHTML = `<dt>${k}</dt><dd>${escapeHtml(String(v))}</dd>`;
+        details.appendChild(row);
+      }
+    } else {
+      resultEl.classList.add('show', 'invalid');
+      badge.textContent = '!';
+      statusText.textContent = 'BU BELGE DOĞRULANAMADI';
+      const row = document.createElement('div');
+      row.innerHTML = `<dt>Aranan kod</dt><dd>${escapeHtml(code || '—')}</dd>`;
+      details.appendChild(row);
+    }
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  async function lookup(code) {
+    if (!code) return;
+    showLoading(true);
+    document.getElementById('result').classList.remove('show');
+    try {
+      const res = await fetch(RECORDS_URL, { cache: 'no-store' });
+      const records = res.ok ? await res.json() : [];
+      const match = records.find(r => String(r.code).toUpperCase() === code);
+      renderResult(match || null, code);
+    } catch (e) {
+      renderResult(null, code);
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  document.getElementById('lookupForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const code = document.getElementById('codeInput').value.trim().toUpperCase();
+    const url = new URL(window.location.href);
+    url.searchParams.set('code', code);
+    window.history.replaceState({}, '', url);
+    lookup(code);
+  });
+
+  window.addEventListener('DOMContentLoaded', () => {
+    const code = getCodeFromQuery();
+    if (code) {
+      document.getElementById('codeInput').value = code;
+      lookup(code);
+    }
+  });
+</script>
+</body>
+</html>
